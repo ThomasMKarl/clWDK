@@ -1,0 +1,10 @@
+doc/html
+doc/latex
+*.log
+*.out
+*.aux
+bin/*
+*.json
+old/*
+*#
+*~

@@ -1,0 +1,187 @@
+#define CLRNG_SINGLE_PRECISION
+#include <mrg31k3p.clh>
+#include "ocl/complex.clh"
+
+#pragma OPENCL EXTENSION cl_khr_fp16: enable
+
+
+
+//! coefficients for the polynomial are generated (real and imagainary) between the upper and lower bound.
+template<typename T>
+struct limits
+{
+ public:
+  T upper{1};
+  T lower{0};
+  limits() = default;
+};
+
+//! callable that sets coefficients to 1 or -1
+template<typename T>
+class InititalizationPlusMinusOne
+{
+ public:
+  InititalizationPlusMinusOne() = default;
+
+  complex<T> operator () (clrngMrg31k3pStream &privateStream) const
+  {
+    const T plusOrMinus = (short int)(2*clrngMrg31k3pRandomU01(&privateStream))*2 - 1;
+    return complex<T>(plusOrMinus,(T)(0));
+  }
+};
+
+
+/*****************************************************************//**
+* \brief contains polynomial data                                    
+*                                                                    
+* The object can only be created in local memory and the member      
+* data is shared across the workgroup.                               
+* Therefore, the object stores \f$256/\textrm{deg}\f$ polynomials at     
+* the same time. Allowed values for deg are 8, 16, 32, 64, 128       
+* and 256. Note that the destructor for local objects has to be      
+* called explicitely. The object can only be declared at kernel      
+* level in the outer most loop. The object cannot be defined through 
+* normal constructors. The copy constructor has to be called.     
+*********************************************************************/
+template<typename T, unsigned long long int deg = 32>
+class Polynomial
+{
+ private:
+  unsigned short int degree{deg};
+  complex<T> coefficients[deg]; /**< contains coefficients for \f$256/\textrm{deg}\f$ polynomials from second highest to lowest degree, the highest is expected to be one and not explicitely stored */
+  complex<T> zeroPoints[deg]; /**< contains zero Points for \f$256/\textrm{deg}\f$ polynomials with no specific order */
+
+ public:
+  Polynomial() = default;
+
+  complex<T> getZeroPoint(const unsigned short int index) const {return zeroPoints[index];}
+
+  /*****************************************************************//**
+  * \brief initializes the coefficients uniformly between associated   
+  * limits and as start values the zero points are equally distributed 
+  * on a circle in the complex plane with a radius of half the         
+  * distance of the limits                                             
+  *********************************************************************/
+  template<typename L = short int>
+  void init(__global clrngMrg31k3pHostStream *streams
+	   ,const limits<L> limit)
+  {
+    const unsigned long long int globalIndex     = get_global_id(0);
+    const unsigned short     int localIndex      = get_local_id(0);
+    const unsigned short     int polynomialIndex = localIndex%degree;
+    
+    clrngMrg31k3pStream privateStream;
+    clrngMrg31k3pCopyOverStreamsFromGlobal(1, &privateStream, &streams[globalIndex]);
+    
+
+    const L difference = limit.upper - limit.lower;
+    const T radius = 0.5f * difference;
+    const complex<T> center(limit.lower+radius,limit.lower+radius);
+    zeroPoints[localIndex]   = complex<T>( radius* cos(polynomialIndex*2.0f*3.1415f/degree) + center.getRealPart(),
+		                           radius* sin(polynomialIndex*2.0f*3.1415f/degree) + center.getImaginaryPart());
+
+    coefficients[localIndex] = complex<T>( limit.lower + clrngMrg31k3pRandomU01(&privateStream)*difference,
+                                           limit.lower + clrngMrg31k3pRandomU01(&privateStream)*difference );
+  }
+
+  /*****************************************************************//**
+  * \brief initializes the coefficients with an arbitrary callable     
+  * and as start values the zero points are equally distributed        
+  * on a circle in the complex plane with radius                
+  *********************************************************************/
+  template <typename I>
+  void init(__global clrngMrg31k3pHostStream *streams
+	   ,const float radius
+	   ,const I &initialization)
+  {
+    const unsigned long long int globalIndex     = get_global_id(0);
+    const unsigned short     int localIndex      = get_local_id(0);
+    const unsigned short     int polynomialIndex = localIndex%degree;
+    
+    clrngMrg31k3pStream privateStream;
+    clrngMrg31k3pCopyOverStreamsFromGlobal(1, &privateStream, &streams[globalIndex]);
+    
+
+    zeroPoints[localIndex]   = complex<T>( radius * cos(polynomialIndex*2.0f*3.1415f/degree),
+		                           radius * sin(polynomialIndex*2.0f*3.1415f/degree) );
+    
+    coefficients[localIndex] = initialization(privateStream);
+  }
+  
+  complex<T> calculatePolynomialValue(const complex<T> input) const
+  {
+    const unsigned short int localIndex = get_local_id(0);
+    const unsigned short int numberOfPolynomialInWorkgroup = localIndex/degree;
+    const unsigned short int offsetInWorkgroup = numberOfPolynomialInWorkgroup*degree;
+	  
+    complex<T> result{1,0};
+    for(unsigned short int index = degree-1; index >= 0; --index)
+      result = result*input + coefficients[index + offsetInWorkgroup];
+    
+    return result;
+  }
+  
+  /*****************************************************************//**
+  * \brief calculates the product of the zero points execept for the   
+  * one with index \param exceptFor                                    
+  *                                                                    
+  * calculates \f$\prod_{i=1,i\neq j}^{d}(x-\zeta_j)\f$ for                
+  * \f$x=\f$ input, \f$j=\f$ exceptFor                             
+  * zero point \f$\zeta\f$ and degree \f$d\f$                                   
+  *********************************************************************/
+  complex<T> calculateProductOfRemainingZeroPoints(const unsigned short int exceptFor) const
+  {
+    complex<T> result{1,0};
+    complex<T> help{};
+    
+    const unsigned short int localIndex = get_local_id(0);
+    const unsigned short int numberOfPolynomialInWorkgroup = localIndex/degree;
+    const unsigned short int offsetInWorkgroup = numberOfPolynomialInWorkgroup*degree;
+ 
+    for(unsigned int index = 0; index < degree; ++index)
+    {
+      if(index != exceptFor)
+	result = result*(zeroPoints[exceptFor + offsetInWorkgroup] - zeroPoints[index + offsetInWorkgroup]);
+    }
+    
+    return result;
+  }
+  
+  /*************************************************************************//**
+  * \brief performs a Weierstrass iteration to estimate all zero Points        
+  *                                                                            
+  * For each zero point with index $k$ the fixed point iteration               
+  * \f$x_k^{i+1} = x_k^{i+1} +                                                   
+  * \frac{\textrm{polynomial}(x_k^i)}{prod_{i=1,i\neq j}^{d}(x_k^i-\zeta_j)}   
+  * \rightarrow x_k\f$ is calculated until the number of steps exceeded           
+  * \f$10\times\f$ degree or                                                         
+  * \f$\textrm{max}\left\{ \frac{|\textrm{polynomial}(x_k^i)|}{|x_k^i|} \right\} 
+  * \leq\f$ tolerance holds.                                                   
+  *****************************************************************************/
+  void weierstrassIteration(const float tolerance)
+  {
+    const unsigned short int localIndex = get_local_id(0);
+    const unsigned short int polynomialIndex = localIndex%degree;
+
+    float error{};
+    float maxError{tolerance};
+    
+    complex<T> zeroProduct{};
+    complex<T> value{};
+    unsigned long long int iterations = 0;
+    while( (iterations < 10*degree) && (maxError >= tolerance) )
+    {
+      zeroProduct = calculateProductOfRemainingZeroPoints(polynomialIndex);
+      value = calculatePolynomialValue(zeroProduct);
+
+      error = value.abs() / zeroPoints[localIndex].abs();
+
+      zeroPoints[localIndex] = zeroPoints[localIndex] - value/zeroProduct;
+      
+      maxError = work_group_reduce_max(error); 
+
+      ++iterations;
+      barrier(CLK_LOCAL_MEM_FENCE);
+    }
+  }
+};

@@ -1,0 +1,81 @@
+//! calculates the absolute value of a real value               
+template<typename T>
+T absolute(T x)
+{
+  if(x < 0) return -x;
+  return x;
+}
+
+template<typename T>
+class complex
+{
+ private:
+  T realPart{0};
+  T imaginaryPart{0};
+
+ public:
+  complex() = default;
+  complex(T realPartSet, T imaginaryPartSet): realPart{realPartSet}, imaginaryPart{imaginaryPartSet} {};
+  complex(T realPartSet): realPart{realPartSet}, imaginaryPart{0} {};
+
+  complex<T> operator*(const complex<T> &other) const
+  {
+    return {realPart * other.realPart      - imaginaryPart * other.imaginaryPart,
+            realPart * other.imaginaryPart + imaginaryPart * other.realPart};
+  }
+  complex<T> operator+(const complex<T> &other) const
+  {
+    return {realPart + other.realPart,
+            imaginaryPart + other.imaginaryPart};
+  }
+  complex<T> operator-(const complex<T> &other) const
+  {
+    return {realPart - other.realPart,
+            imaginaryPart - other.imaginaryPart};
+  }
+  complex<T> operator/(const complex<T> &other) const
+  {
+    T helper1, helper2;
+    if(absolute(other.realPart) < absolute(other.imaginaryPart))
+    {
+        helper1 = other.realPart / other.imaginaryPart;
+        helper2 = other.realPart * helper1 + other.imaginaryPart;
+
+        return complex<T>((realPart * helper2 + imaginaryPart) / helper1,
+	                  (imaginaryPart * helper2 - realPart) / helper1);
+    }
+    helper2 = other.imaginaryPart / other.realPart;
+    helper1 = other.realPart + other.imaginaryPart * helper2;
+    return complex<T>((realPart + imaginaryPart * helper2) / helper1,
+	              (imaginaryPart - realPart * helper2) / helper1);
+  }
+  
+  complex<T> pow(complex<T> a, unsigned long long int n) const
+  {
+    if (n == 0) return( complex<T>(1,0) );
+
+    bool invert{false};
+    if(n < 0)
+    {
+      invert = true;
+      n = -n;
+    }
+    
+    complex<T> help(a);
+
+    for(unsigned long long int i = 1; i < n; i++) help *= a;
+    
+    if(invert) return this/help;
+    
+    return help;
+  }
+  
+  T abs() const
+  {
+    return sqrt(realPart*realPart + imaginaryPart*imaginaryPart);
+  }
+  
+  T getRealPart()      const { return realPart; }
+  
+  T getImaginaryPart() const { return imaginaryPart; }
+};
