@@ -1,4 +1,5 @@
 INCLUDE=-I ./include -I /home/thomas/libraries/clRNG/include -I /home/thomas/libraries/clRNG/cl/include
+DEFINE=-D DEBUG_OCL
 LIBRARY=-lOpenCL -lclRNG
 CXX=g++
 LLVMSPIR=/home/thomas/libraries/SPIRV-LLVM-Translator/build/tools/llvm-spirv/llvm-spirv
@@ -12,12 +13,14 @@ all:
 	make doc
 
 ## build : compiles executables
-build: wdk.o weierstrass.spv
-	$(CXX) $(INCLUDE) src/ocl.cpp    src/wdk.o $(LIBRARY) -O3 -Wall -Wextra -std=c++17 -o bin/wdk_ocl -D DEBUG_OCL
-	$(CXX) $(INCLUDE) src/serial.cpp src/wdk.o $(LIBRARY) -O3 -Wall -Wextra -std=c++17 -o bin/wdk_host -fopenmp -D DEBUG_OCL
+build: ocl.o wdk.o weierstrass.spv
+	$(CXX) $(INCLUDE) src/gpu.cpp  src/ocl.o src/wdk.o $(LIBRARY) -O3 -Wall -Wextra -std=c++17 -o bin/wdk_gpu $(DEFINE)
+	$(CXX) $(INCLUDE) src/host.cpp src/ocl.o src/wdk.o $(LIBRARY) -O3 -Wall -Wextra -std=c++17 -o bin/wdk_host -fopenmp $(DEFINE)
 
 wdk.o:
-	$(CXX) $(INCLUDE) -c src/wdk.cpp $(LIBRARY) -std=c++17 -Wall -Wextra -O3 -o src/wdk.o -D DEBUG_OCL
+	$(CXX) $(INCLUDE) -c src/wdk.cpp $(LIBRARY) -std=c++17 -Wall -Wextra -O3 -o src/wdk.o $(DEFINE)
+ocl.o:
+	$(CXX) $(INCLUDE) -c src/ocl.cpp $(LIBRARY) -std=c++17 -Wall -Wextra -O3 -o src/ocl.o $(DEFINE)
 
 weierstrass.spv:
 	mkdir -p bin
@@ -44,7 +47,7 @@ weierstrass.spv:
 	#$(SPIRLINK) bin/llvm/weierstrass256.bc -o help.bc
 	#$(LLVMSPIR) help.bc -o bin/spirv/weierstrass256.spv
 
-	rm help.bc
+	#rm help.bc
 
 .PHONY: test
 ## test  : compiles and executes tests, creates example plots

@@ -1,3 +1,8 @@
+#ifndef COMPLEX_H
+#define COMPLEX_H
+
+namespace WDK {
+
 //! calculates the absolute value of a real value               
 template<typename T>
 T absolute(T x)
@@ -79,3 +84,6 @@ class complex
   
   T getImaginaryPart() const { return imaginaryPart; }
 };
+
+};//namespace WDK
+#endif

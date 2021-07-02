@@ -1,5 +1,3 @@
-#include<algorithm>
-
 #include "wdk.h"
 
 
@@ -13,7 +11,7 @@ int main(int argc, char* argv[])
   
   size_t numberOfPolynomials = atoi(argv[1]);
   unsigned short int degree = atoi(argv[2]);
-  limits<short int> limit{};
+  WDK::limits<short int> limit{};
   unsigned short int radius = limit.upper - limit.lower;
   limit.lower = atoi(argv[3]);
   limit.upper = atoi(argv[4]);
@@ -25,7 +23,7 @@ int main(int argc, char* argv[])
   float tolerance = atof(argv[5]);
 
   bool host = true;
-  WdkSetup<float> wdkSetup(degree, numberOfPolynomials, tolerance, limit, host);
+  WDK::WdkSetup<float> wdkSetup(degree, numberOfPolynomials, tolerance, limit, host);
 
   /////////////////////////////////////////////////////////////////////////////////////
   
@@ -33,13 +31,13 @@ int main(int argc, char* argv[])
 
   unsigned long long int seed = time(NULL);
 
-  InitializationPlusMinusOne<float> init(seed);
+  WDK::InitializationPlusMinusOne<float> init(seed);
   
   #pragma omp parallel for
   for(size_t i = 0; i < wdkSetup.numberOfPolynomials; ++i)
   {   
-    initPolynomial(wdkSetup, radius, init);
-    weierstrassIteration(wdkSetup);
+    WDK::initPolynomial(wdkSetup, radius, init);
+    WDK::weierstrassIteration(wdkSetup);
   }
   
   auto end = std::chrono::system_clock::now();

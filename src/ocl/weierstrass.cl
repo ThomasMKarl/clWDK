@@ -2,6 +2,8 @@
 
 
 
+namespace WDK {
+
 class Picture
 {
  private:
@@ -68,12 +70,14 @@ void updatePicture(__global clrngMrg31k3pHostStream *streams
   polynomial = {};
   
   const float radius = 1.0f;
-  polynomial.init(InititalizationPlusMinusOne<T>{}, radius, streams);
+  polynomial.init(streams, radius, InititalizationPlusMinusOne<T>{});
     
   polynomial.weierstrassIteration(tolerance);
   
   rgbPicture.update(polynomial, limit);
 }
+
+};//namespace WDK
 
 #ifndef DEGREE
   #define DEGREE 32
@@ -94,16 +98,16 @@ void computeZeroPointPicture_single(__global clrngMrg31k3pHostStream *streams
 {
   const unsigned long long int globalIndex = get_global_id(0);
 
-  __local Polynomial<float,DEGREE> polynomial;
+  __local WDK::Polynomial<float,DEGREE> polynomial;
   
   if(globalIndex < numberOfPolynomials) //might leave cores inactive
   {
-    limits<short int> limit{};
+    WDK::limits<short int> limit{};
     limit.upper = upperLimit;
     limit.lower = lowerLimit;
 
-    Picture rgbPicture{numberOfPixelsX, numberOfPixelsY, rgbPictureData};
-    updatePicture<float,DEGREE>(streams, limit, tolerance, rgbPicture, polynomial); 
+    WDK::Picture rgbPicture{numberOfPixelsX, numberOfPixelsY, rgbPictureData};
+    WDK::updatePicture<float,DEGREE>(streams, limit, tolerance, rgbPicture, polynomial); 
   }
 
   polynomial.~Polynomial();
@@ -124,16 +128,16 @@ void computeZeroPointPicture_double(__global clrngMrg31k3pHostStream *streams
 {  
   const unsigned long long int globalIndex = get_global_id(0);
 
-  __local Polynomial<double,DEGREE> polynomial;
+  __local WDK::Polynomial<double,DEGREE> polynomial;
   
   if(globalIndex < numberOfPolynomials)
   {
-    limits<short int> limit{};
+    WDK::limits<short int> limit{};
     limit.upper = upperLimit;
     limit.lower = lowerLimit;
 
-    Picture rgbPicture{numberOfPixelsX, numberOfPixelsY, rgbPictureData};
-    updatePicture<double,DEGREE>(streams, limit, tolerance, rgbPicture, polynomial); 
+    WDK::Picture rgbPicture{numberOfPixelsX, numberOfPixelsY, rgbPictureData};
+    WDK::updatePicture<double,DEGREE>(streams, limit, tolerance, rgbPicture, polynomial); 
   }
 
   polynomial.~Polynomial();
@@ -154,16 +158,16 @@ void computeZeroPointPicture_half(__global clrngMrg31k3pHostStream *streams
 {
   const unsigned long long int globalIndex = get_global_id(0);
 
-  __local Polynomial<half,DEGREE> polynomial;
+  __local WDK::Polynomial<half,DEGREE> polynomial;
   
   if(globalIndex < numberOfPolynomials)
   {
-    limits<short int> limit{};
+    WDK::limits<short int> limit{};
     limit.upper = upperLimit;
     limit.lower = lowerLimit;
 
-    Picture rgbPicture{numberOfPixelsX, numberOfPixelsY, rgbPictureData};
-    updatePicture<half,DEGREE>(streams, limit, tolerance, rgbPicture, polynomial); 
+    WDK::Picture rgbPicture{numberOfPixelsX, numberOfPixelsY, rgbPictureData};
+    WDK::updatePicture<half,DEGREE>(streams, limit, tolerance, rgbPicture, polynomial); 
   }
   
   polynomial.~Polynomial();

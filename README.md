@@ -42,7 +42,7 @@ executables:
 
 "bin/wdk_host" is the CPU-only program.
 
-"bin/wdk_ocl" is the GPU program.
+"bin/wdk_gpu" is the GPU program.
 
 Use the commands with inputs 
 

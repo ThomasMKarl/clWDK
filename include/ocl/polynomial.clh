@@ -1,3 +1,6 @@
+#ifndef POLYNOMIAL_H
+#define POLYNOMIAL_H
+
 #define CLRNG_SINGLE_PRECISION
 #include <mrg31k3p.clh>
 #include "ocl/complex.clh"
@@ -5,6 +8,8 @@
 #pragma OPENCL EXTENSION cl_khr_fp16: enable
 
 
+
+namespace WDK {
 
 //! coefficients for the polynomial are generated (real and imagainary) between the upper and lower bound.
 template<typename T>
@@ -43,13 +48,13 @@ class InititalizationPlusMinusOne
 * level in the outer most loop. The object cannot be defined through 
 * normal constructors. The copy constructor has to be called.     
 *********************************************************************/
-template<typename T, unsigned long long int deg = 32>
+template<typename T, unsigned long long int deg = 32, unsigned short int workgroupSize = 256>
 class Polynomial
 {
  private:
   unsigned short int degree{deg};
-  complex<T> coefficients[deg]; /**< contains coefficients for \f$256/\textrm{deg}\f$ polynomials from second highest to lowest degree, the highest is expected to be one and not explicitely stored */
-  complex<T> zeroPoints[deg]; /**< contains zero Points for \f$256/\textrm{deg}\f$ polynomials with no specific order */
+  complex<T> coefficients[deg * workgroupSize]; /**< contains coefficients for \f$256/\textrm{deg}\f$ polynomials from second highest to lowest degree, the highest is expected to be one and not explicitely stored */
+  complex<T> zeroPoints[deg * workgroupSize]; /**< contains zero Points for \f$256/\textrm{deg}\f$ polynomials with no specific order */
 
  public:
   Polynomial() = default;
@@ -172,7 +177,7 @@ class Polynomial
     while( (iterations < 10*degree) && (maxError >= tolerance) )
     {
       zeroProduct = calculateProductOfRemainingZeroPoints(polynomialIndex);
-      value = calculatePolynomialValue(zeroProduct);
+      value = calculatePolynomialValue(zeroPoints[localIndex]);
 
       error = value.abs() / zeroPoints[localIndex].abs();
 
@@ -185,3 +190,6 @@ class Polynomial
     }
   }
 };
+
+};//namespace WDK
+#endif

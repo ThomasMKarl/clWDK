@@ -1,35 +1,9 @@
-#include<iostream>
-#include<fstream>
-#include<sstream>
-#include<chrono>
-#include<complex>
-#include<random>
+#ifndef WDK_H
+#define WDK_H
 
-#define CL_HPP_TARGET_OPENCL_VERSION 200
-#define CL_TARGET_OPENCL_VERSION 300
-#include <CL/opencl.hpp>
-#include <clRNG/clRNG.h>
-#include <clRNG/mrg31k3p.h>
+#include "ocl.h"
 
-#ifdef DEBUG_OCL
-#define OCL_CALL_DIE(x) do { cl_int r = x ;if((r)!=CL_SUCCESS) {		\
- printf("Error %s (%d) at line %d\n", oclGenErrorString(r), r, __LINE__); \
- return EXIT_FAILURE;}} while(0)
-
-#define OCL_CALL_RET(x) do { cl_int r = x ;if((r)!=CL_SUCCESS) {		\
- printf("Error %s (%d) at line %d\n", oclGenErrorString(r), r, __LINE__); \
- return;}} while(0)
-#endif
-
-#ifndef DEBUG_OCL
-#define OCL_CALL_DIE(x) do { x;} while(0)
- 
-#define OCL_CALL_RET(x) do { x;} while(0)
-#endif
-
-const char* oclGenErrorString(cl_int error);
-
-
+namespace WDK {
 
 //! coefficients for the polynomial are generated (real and imagainary) between the upper and lower bound.
 template<typename T>
@@ -169,7 +143,7 @@ void computePictureData(OclSetup &oclSetup
     NULL, 
     numberOfPolynomials*degree,
     &streamBufferSize, 
-    (clrngStatus*)&err); oclSetup.setError(err); OCL_CALL_RET(err);
+    (clrngStatus*)&err); CLRNG_CALL_RET(err);
 
   
   cl::Buffer streams_buffer = cl::Buffer(
@@ -337,3 +311,6 @@ void initPolynomial(WdkSetup<T> &wdkSetup
 			                             radius * sin(index*2.0f*3.1415f/T(wdkSetup.degree)));
   }
 }
+
+}; //namespace WDK
+#endif
