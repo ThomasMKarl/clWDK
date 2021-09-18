@@ -14,11 +14,11 @@ all:
 
 ## build : compiles executables
 build: ocl.o wdk.o weierstrass.spv
-	$(CXX) $(INCLUDE) src/gpu.cpp  src/ocl.o src/wdk.o $(LIBRARY) -O3 -Wall -Wextra -std=c++17 -o bin/wdk_gpu $(DEFINE)
+	$(CXX) $(INCLUDE) src/gpu.cpp  src/ocl.o src/wdk.o $(LIBRARY) -O3 -Wall -Wextra -std=c++17 -o bin/wdk_gpu  -fopenmp $(DEFINE)
 	$(CXX) $(INCLUDE) src/host.cpp src/ocl.o src/wdk.o $(LIBRARY) -O3 -Wall -Wextra -std=c++17 -o bin/wdk_host -fopenmp $(DEFINE)
 
 wdk.o:
-	$(CXX) $(INCLUDE) -c src/wdk.cpp $(LIBRARY) -std=c++17 -Wall -Wextra -O3 -o src/wdk.o $(DEFINE)
+	$(CXX) $(INCLUDE) -c src/wdk.cpp $(LIBRARY) -std=c++17 -Wall -Wextra -O3 -o src/wdk.o -fopenmp $(DEFINE)
 ocl.o:
 	$(CXX) $(INCLUDE) -c src/ocl.cpp $(LIBRARY) -std=c++17 -Wall -Wextra -O3 -o src/ocl.o $(DEFINE)
 
@@ -27,12 +27,12 @@ weierstrass.spv:
 	mkdir -p bin/spirv
 	mkdir -p bin/llvm
 
-	clang -c -cl-std=CLC++ -target spir -O0 -emit-llvm src/ocl/weierstrass.cl -Xclang -finclude-default-header $(INCLUDE) -o bin/llvm/weierstrass8.bc -D DEGREE=8
-	clang -c -cl-std=CLC++ -target spir -O0 -emit-llvm src/ocl/weierstrass.cl -Xclang -finclude-default-header $(INCLUDE) -o bin/llvm/weierstrass16.bc -D DEGREE=16
-	clang -c -cl-std=CLC++ -target spir -O0 -emit-llvm src/ocl/weierstrass.cl -Xclang -finclude-default-header $(INCLUDE) -o bin/llvm/weierstrass32.bc -D DEGREE=32
-	clang -c -cl-std=CLC++ -target spir -O0 -emit-llvm src/ocl/weierstrass.cl -Xclang -finclude-default-header $(INCLUDE) -o bin/llvm/weierstrass64.bc -D DEGREE=64
-	clang -c -cl-std=CLC++ -target spir -O0 -emit-llvm src/ocl/weierstrass.cl -Xclang -finclude-default-header $(INCLUDE) -o bin/llvm/weierstrass128.bc -D DEGREE=128
-	clang -c -cl-std=CLC++ -target spir -O0 -emit-llvm src/ocl/weierstrass.cl -Xclang -finclude-default-header $(INCLUDE) -o bin/llvm/weierstrass256.bc -D DEGREE=256
+	clang -c -cl-std=CLC++ -target spir -O0 -emit-llvm src/ocl/weierstrass.cl -Xclang -finclude-default-header $(INCLUDE) -o bin/llvm/weierstrass8.bc -D DEGREE=8 -Wall -Wextra
+	clang -c -cl-std=CLC++ -target spir -O0 -emit-llvm src/ocl/weierstrass.cl -Xclang -finclude-default-header $(INCLUDE) -o bin/llvm/weierstrass16.bc -D DEGREE=16 -Wall -Wextra
+	clang -c -cl-std=CLC++ -target spir -O0 -emit-llvm src/ocl/weierstrass.cl -Xclang -finclude-default-header $(INCLUDE) -o bin/llvm/weierstrass32.bc -D DEGREE=32 -Wall -Wextra
+	clang -c -cl-std=CLC++ -target spir -O0 -emit-llvm src/ocl/weierstrass.cl -Xclang -finclude-default-header $(INCLUDE) -o bin/llvm/weierstrass64.bc -D DEGREE=64 -Wall -Wextra
+	clang -c -cl-std=CLC++ -target spir -O0 -emit-llvm src/ocl/weierstrass.cl -Xclang -finclude-default-header $(INCLUDE) -o bin/llvm/weierstrass128.bc -D DEGREE=128 -Wall -Wextra
+	clang -c -cl-std=CLC++ -target spir -O0 -emit-llvm src/ocl/weierstrass.cl -Xclang -finclude-default-header $(INCLUDE) -o bin/llvm/weierstrass256.bc -D DEGREE=256 -Wall -Wextra
 
 	#$(SPIRLINK) bin/llvm/weierstrass8.bc -o help.bc
 	#$(LLVMSPIR) bin/llvm/weierstrass8.bc -o bin/spirv/weierstrass8.spv

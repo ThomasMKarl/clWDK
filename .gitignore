@@ -8,6 +8,7 @@ bin/*
 old/*
 *#
 *~
-src/ocl/fpga/*
-include/ocl/fpga/*
+src/fpga/*
+include/fpga/*
+fpga.cpp
 *.o

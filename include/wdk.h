@@ -3,6 +3,8 @@
 
 #include "ocl.h"
 
+
+
 namespace WDK {
 
 //! coefficients for the polynomial are generated (real and imagainary) between the upper and lower bound.
@@ -26,6 +28,23 @@ class InitializationPlusMinusOne
  public:
   InitializationPlusMinusOne(const size_t seed) : generator{seed} {};
   std::complex<T> operator () () {return std::complex<T>(distribution(generator)*2 - 1, 0);}
+};
+
+template <typename T>
+struct aligned_allocator
+{
+	using value_type= T;
+	T* allocate(std::size_t num)
+	{
+		void *ptr = nullptr;
+		if( posix_memalign(&ptr, 4096, num*sizeof(T)) )
+			throw std::bad_alloc();
+		return reinterpret_cast<T*>(ptr);
+	}
+	void deallocate(T* p, std::size_t num)
+	{
+		free(p);
+	}
 };
 
 //! a handler for simulation setup data
@@ -70,10 +89,10 @@ class OclSetup
 
   cl::Context context{};
 
-  cl::CommandQueue queue{};
+  std::vector<cl::CommandQueue> queues{};
 
   cl::Program program{};
-  cl::Kernel kernel{};
+  std::vector<cl::Kernel> kernels{};
 
   OclSetup() = default;
   
@@ -85,8 +104,9 @@ class OclSetup
     const unsigned short int platformNumber = 0,
     const unsigned short int deviceNumber   = 0);
   void oclBuildProgram(
-    const std::string spirvFilename, 
-    const std::string includePath);
+    const std::string binaryFilename,
+    const std::string includePath = "");
+  void createKernelFpga();
   void createKernelSingle();
   void createKernelDouble();
   void createKernelHalf();
@@ -103,7 +123,7 @@ class Picture
  public:
   cl_uint numberOfPixelsXdirection{0};
   cl_uint numberOfPixelsYdirection{0};
-  std::vector<cl_uint> imageData{};
+  std::vector<cl_uint, aligned_allocator<cl_uint>> imageData{};
   
   Picture() = default;
   Picture(
@@ -160,25 +180,85 @@ void computePictureData(OclSetup &oclSetup
     &err); oclSetup.setError(err); OCL_CALL_RET(err);
 
   size_t narg = 0;
-  oclSetup.kernel.setArg(narg++, streams_buffer);
-  oclSetup.kernel.setArg(narg++, numberOfPolynomials);
-  oclSetup.kernel.setArg(narg++, wdkSetup.limit.lower);
-  oclSetup.kernel.setArg(narg++, wdkSetup.limit.upper);
-  oclSetup.kernel.setArg(narg++, tolerance);
-  oclSetup.kernel.setArg(narg++, picture.numberOfPixelsXdirection);
-  oclSetup.kernel.setArg(narg++, picture.numberOfPixelsXdirection);
-  oclSetup.kernel.setArg(narg++, image_buffer);
+  oclSetup.kernels[0].setArg(narg++, streams_buffer);
+  oclSetup.kernels[0].setArg(narg++, numberOfPolynomials);
+  oclSetup.kernels[0].setArg(narg++, wdkSetup.limit.lower);
+  oclSetup.kernels[0].setArg(narg++, wdkSetup.limit.upper);
+  oclSetup.kernels[0].setArg(narg++, tolerance);
+  oclSetup.kernels[0].setArg(narg++, picture.numberOfPixelsXdirection);
+  oclSetup.kernels[0].setArg(narg++, picture.numberOfPixelsXdirection);
+  oclSetup.kernels[0].setArg(narg++, image_buffer);
 
   const unsigned short int workgroupSize = 256;
   const size_t numberOfWorkgroups = std::ceil( (degree*numberOfPolynomials)/workgroupSize );
   const size_t globalSize = numberOfWorkgroups * workgroupSize;
-  err = oclSetup.queue.enqueueNDRangeKernel(
-    oclSetup.kernel, 
+  err = oclSetup.queues[0].enqueueNDRangeKernel(
+    oclSetup.kernels[0],
     cl::NullRange, 
     cl::NDRange(globalSize), 
     cl::NDRange(workgroupSize)); oclSetup.setError(err); OCL_CALL_RET(err);
   
-  err = oclSetup.queue.enqueueMigrateMemObjects({image_buffer}, CL_MIGRATE_MEM_OBJECT_HOST); oclSetup.setError(err); OCL_CALL_RET(err);
+  err = oclSetup.queues[0].enqueueMigrateMemObjects({image_buffer}, CL_MIGRATE_MEM_OBJECT_HOST); oclSetup.setError(err); OCL_CALL_RET(err);
+}
+
+/*****************************************************************//**
+* \brief fills the data in picture
+*
+* Creates stream of random numbers, allocates buffers, enqueues
+* kernel and retrieves image data. The calls are non-blocking.
+* A synchronisation operation on the queue might be needed after
+* the successfull execution of the function.
+*********************************************************************/
+template<typename T>
+void computePictureData_FPGA(OclSetup &oclSetup
+		       ,Picture &picture
+		       ,const WdkSetup<T> &wdkSetup)
+{
+  const unsigned int numberOfPixels = picture.numberOfPixelsYdirection * picture.numberOfPixelsYdirection;
+
+  const cl_ulong numberOfPolynomials = wdkSetup.numberOfPolynomials;
+  const cl_ushort degree = wdkSetup.degree;
+  const cl_float tolerance = wdkSetup.tolerance;
+
+  cl_int err{};
+
+  cl::Buffer image_buffer   = cl::Buffer(
+    oclSetup.context,
+    CL_MEM_WRITE_ONLY | CL_MEM_USE_HOST_PTR,
+    numberOfPixels*sizeof(cl_uint),
+    picture.imageData.data(),
+    &err); oclSetup.setError(err); OCL_CALL_RET(err);
+
+  std::vector<cl::Event> events{};
+
+  #pragma omp parallel private(err)
+  {
+  size_t kernelNumber = 0;
+  #ifdef OPENMP
+    kernelNumber = omp_get_thread_num();
+  #endif
+
+  size_t narg = 0;
+  oclSetup.kernels[kernelNumber].setArg(narg++, wdkSetup.limit.lower);
+  oclSetup.kernels[kernelNumber].setArg(narg++, wdkSetup.limit.upper);
+  oclSetup.kernels[kernelNumber].setArg(narg++, tolerance);
+  oclSetup.kernels[kernelNumber].setArg(narg++, picture.numberOfPixelsXdirection);
+  oclSetup.kernels[kernelNumber].setArg(narg++, picture.numberOfPixelsXdirection);
+  oclSetup.kernels[kernelNumber].setArg(narg++, image_buffer);
+
+  cl::Event kernelExecuted{};
+  err = oclSetup.queues[kernelNumber].enqueueNDRangeKernel(
+		    oclSetup.kernels[0],
+		    cl::NullRange,
+		    cl::NDRange(1),
+		    cl::NDRange(1),
+			NULL,
+			&kernelExecuted); oclSetup.setError(err); OCL_CALL_OMP(err);
+
+  events.push_back(kernelExecuted);
+  }OCL_CALL_RET(err);
+
+  err = oclSetup.queues[0].enqueueMigrateMemObjects({image_buffer}, CL_MIGRATE_MEM_OBJECT_HOST, &events); oclSetup.setError(err); OCL_CALL_RET(err);
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -191,6 +271,7 @@ void computePictureData(OclSetup &oclSetup
 * or if degree is not 8, 16, 32, 64, 128 or 256               
 *********************************************************************/
 std::string getSpirBinaryPath(const unsigned short int degree);
+std::string getXclbinPath(const unsigned short int degree);
 std::string getClrngIncludePath();
 
 //////////////////////////////////////////////////////////////////////////////

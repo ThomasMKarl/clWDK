@@ -55,22 +55,26 @@ void OclSetup::oclPrepareQueue(const unsigned short int platformNumber, const un
 
   context = cl::Context(device, NULL, NULL, NULL, &err); OCL_CALL_RET(err);
 
-  queue = cl::CommandQueue(context, CL_QUEUE_PROFILING_ENABLE, &err); OCL_CALL_RET(err);
+  #pragma omp parallel
+  {
+    #pragma omp critical
+    queues.push_back(cl::CommandQueue(context, CL_QUEUE_PROFILING_ENABLE, &err));
+  }OCL_CALL_RET(err);
 }
 
-void OclSetup::oclBuildProgram(const std::string spirvFilename, const std::string includePath)
+void OclSetup::oclBuildProgram(const std::string binaryFilename, const std::string includePath)
 {  
-  std::ifstream inputStream(spirvFilename.c_str());
+  std::ifstream inputStream(binaryFilename.c_str());
   
-  std::string spirString((std::istreambuf_iterator<char>(inputStream)),
-                         (std::istreambuf_iterator<char>()));
+  std::string binaryString((std::istreambuf_iterator<char>(inputStream)),
+                           (std::istreambuf_iterator<char>()));
   unsigned long long int binarySize = inputStream.tellg();
 
   //cl_program prog = clCreateProgramWithIL(context.get(),(void*)(spirString.data()), binarySize, &err); OCL_CALL_RET(err);
   //cl_device_id device_list[] = {device.get()};
   //err = clBuildProgram(program.get(), 1, device_list, includePath.c_str(), NULL, NULL);
   
-  cl::Program::Binaries binary{{(unsigned char)*(spirString.data()),(unsigned char)(binarySize)}};
+  cl::Program::Binaries binary{{(unsigned char)*(binaryString.data()),(unsigned char)(binarySize)}};
   
   std::vector<cl_int> binaryStatus{};
   program = cl::Program(context, {device}, binary, &binaryStatus, &err); OCL_CALL_RET(binaryStatus[0]); OCL_CALL_RET(err);
@@ -79,19 +83,36 @@ void OclSetup::oclBuildProgram(const std::string spirvFilename, const std::strin
   if(err != CL_SUCCESS) oclProgramTest();
 }
 
+void OclSetup::createKernelFpga()
+{
+  #pragma omp parallel
+  {
+	size_t kernelNumber = 0;
+    #ifdef OPENMP
+	  kernelNumber = omp_get_thread_num()+0;
+    #endif
+
+	std::string kernelName = "computeZeroPointPicture_";
+	kernelName.append(std::to_string(kernelNumber+1));
+
+    #pragma omp critical
+    kernels.push_back(cl::Kernel(program, kernelName.c_str(), &err));
+  }OCL_CALL_RET(err);
+}
+
 void OclSetup::createKernelSingle()
 {
-  kernel = cl::Kernel(program, "computeZeroPointPicture_single", &err); OCL_CALL_RET(err);
+  kernels[0] = cl::Kernel(program, "computeZeroPointPicture_single", &err); OCL_CALL_RET(err);
 }
 
 void OclSetup::createKernelDouble()
 {
-  kernel = cl::Kernel(program, "computeZeroPointPicture_double", &err); OCL_CALL_RET(err);
+  kernels[0] = cl::Kernel(program, "computeZeroPointPicture_double", &err); OCL_CALL_RET(err);
 }
 
 void OclSetup::createKernelHalf()
 {
-  kernel = cl::Kernel(program, "computeZeroPointPicture_half",   &err); OCL_CALL_RET(err);
+  kernels[0] = cl::Kernel(program, "computeZeroPointPicture_half",   &err); OCL_CALL_RET(err);
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -116,6 +137,15 @@ std::string getSpirBinaryPath(unsigned short int degree = 32)
     std::cerr << "Degree must be 8, 16, 32, 64, 128 or 256.\n";
     return "";
   }
+}
+
+std::string getXclbinPath(unsigned short int degree = 32)
+{
+  std::string xclbinPath = "bin/xilinx/weierstrass";
+  xclbinPath.append(std::to_string(degree));
+  xclbinPath.append(".xclbin");
+
+  return xclbinPath;
 }
 
 std::string getClrngIncludePath()

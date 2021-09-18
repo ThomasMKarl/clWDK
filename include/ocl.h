@@ -5,7 +5,7 @@
 
 #define CL_HPP_TARGET_OPENCL_VERSION 200
 #define CL_TARGET_OPENCL_VERSION 300
-#include <CL/opencl.hpp>
+#include </usr/include/CL/opencl.hpp>
 #include <clRNG/clRNG.h>
 #include <clRNG/mrg31k3p.h>
 
@@ -24,6 +24,12 @@
  } \
 } while(0)
 
+#define   OCL_CALL_OMP(x) do { \
+ cl_int error = x; if((error)!=CL_SUCCESS) { \
+  std::cerr << " Error " << error << " at line " << __LINE__ << " in file " << __FILE__ << "\n" <<   cl::oclGenErrorString(error) << "\n"; \
+ } \
+} while(0)
+
 #define CLRNG_CALL_DIE(x) do { \
  cl_int error = x; if((error)!=CLRNG_SUCCESS) {	\
   std::cerr << " Error " << error << " at line " << __LINE__ << " in file " << __FILE__ << "\n" << cl::clrngGenErrorString(error) << "\n"; \
@@ -35,6 +41,12 @@
  cl_int error = x; if((error)!=CLRNG_SUCCESS) {	\
   std::cerr << " Error " << error << " at line " << __LINE__ << " in file " << __FILE__ << "\n" << cl::clrngGenErrorString(error) << "\n"; \
   return; \
+ } \
+} while(0)
+
+#define CLRNG_CALL_OMP(x) do { \
+ cl_int error = x; if((error)!=CLRNG_SUCCESS) {	\
+  std::cerr << " Error " << error << " at line " << __LINE__ << " in file " << __FILE__ << "\n" << cl::clrngGenErrorString(error) << "\n"; \
  } \
 } while(0)
 #endif

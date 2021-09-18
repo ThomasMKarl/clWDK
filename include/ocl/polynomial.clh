@@ -137,7 +137,6 @@ class Polynomial
   complex<T> calculateProductOfRemainingZeroPoints(const unsigned short int exceptFor) const
   {
     complex<T> result{1,0};
-    complex<T> help{};
     
     const unsigned short int localIndex = get_local_id(0);
     const unsigned short int numberOfPolynomialInWorkgroup = localIndex/degree;
