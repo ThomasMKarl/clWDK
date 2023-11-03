@@ -1,4 +1,4 @@
-﻿  \begin{tikzpicture}[scale=1.15]
+  \begin{tikzpicture}[scale=1.15]
   \scriptsize
     \begin{loglogaxis}[xlabel={number of polynomials $n$}, ylabel={computation time $t$ / sec.}, legend pos=outer north east, legend style={cells={align=left}}]
       \addplot [draw=red!50!black, mark=*, only marks, fill=red!50!white] table[x expr=\thisrowno{0},y index=3]{test/time.dat};
