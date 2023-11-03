@@ -27,24 +27,28 @@ class InitializationPlusMinusOne
   
  public:
   InitializationPlusMinusOne(const size_t seed) : generator{seed} {};
-  std::complex<T> operator () () {return std::complex<T>(distribution(generator)*2 - 1, 0);}
+  std::complex<T> operator () ()
+  {
+    using namespace std::complex_literals;
+    return static_cast<float>(distribution(generator)*2 - 1) + 0.0if;
+  }
 };
 
 template <typename T>
 struct aligned_allocator
 {
-	using value_type= T;
-	T* allocate(std::size_t num)
-	{
-		void *ptr = nullptr;
-		if( posix_memalign(&ptr, 4096, num*sizeof(T)) )
-			throw std::bad_alloc();
-		return reinterpret_cast<T*>(ptr);
-	}
-	void deallocate(T* p, std::size_t num)
-	{
-		free(p);
-	}
+  using value_type= T;
+  T* allocate(std::size_t num)
+  {
+    void *ptr = nullptr;
+    if(posix_memalign(&ptr, 4096, num*sizeof(T)))
+      throw std::bad_alloc();
+    return reinterpret_cast<T*>(ptr);
+  }
+  void deallocate(T* p, std::size_t num)
+  {
+    free(p);
+  }
 };
 
 //! a handler for simulation setup data
@@ -271,7 +275,38 @@ void computePictureData_FPGA(OclSetup &oclSetup
 * or if degree is not 8, 16, 32, 64, 128 or 256               
 *********************************************************************/
 std::string getSpirBinaryPath(const unsigned short int degree);
+
+/*****************************************************************//**
+* \brief returns the path of the fpga device binary that is compiled
+* for degree
+*                                                                    
+* returns an empty string if the file is not found or inaccessible   
+* or if degree is not 8, 16, 32, 64, 128 or 256               
+*********************************************************************/
 std::string getXclbinPath(const unsigned short int degree);
+
+/*****************************************************************//**
+* \brief returns the path of the fpga device binary (software emulation) 
+* that is compiled for degree
+*                                                                    
+* returns an empty string if the file is not found or inaccessible   
+* or if degree is not 8, 16, 32, 64, 128 or 256               
+*********************************************************************/
+std::string getXclbinPath_sw(const unsigned short int degree);
+
+/*****************************************************************//**
+* \brief returns the path of the fpga device binary (hardware emulation)
+* that is compiled for degree
+*                                                                    
+* returns an empty string if the file is not found or inaccessible   
+* or if degree is not 8, 16, 32, 64, 128 or 256               
+*********************************************************************/
+std::string getXclbinPath_hw(const unsigned short int degree);
+
+/*****************************************************************//**
+* \brief returns "-I /path/to/clRNG/include" based on environment
+* variable CL_RNG_ROOT
+*********************************************************************/
 std::string getClrngIncludePath();
 
 //////////////////////////////////////////////////////////////////////////////
@@ -384,12 +419,18 @@ void initPolynomial(WdkSetup<T> &wdkSetup
                    ,const float radius
                    ,I &initialization)
 {
-  std::generate(wdkSetup.hostPolynomial.begin(), wdkSetup.hostPolynomial.end(), initialization());
+  using namespace std::complex_literals;
   
+  std::generate(wdkSetup.hostPolynomial.begin(), wdkSetup.hostPolynomial.end(), initialization());
+
+  float real{};
+  std::complex<float> imag{};
+  std::complex<float> i_f = 0.0f + 1if;
   for(unsigned short int index = 0; index < wdkSetup.degree; ++index)
   {
-    wdkSetup.hostZeroPoints[index] = std::complex<T>(radius * cos(index*2.0f*3.1415f/T(wdkSetup.degree)),
-			                             radius * sin(index*2.0f*3.1415f/T(wdkSetup.degree)));
+    real = radius * cosf(index*2.0f*3.1415f/float(wdkSetup.degree));
+    imag = radius * sinf(index*2.0f*3.1415f/float(wdkSetup.degree)) * i_f;
+    wdkSetup.hostZeroPoints[index] = static_cast<std::complex<T>>(real + imag);
   }
 }
 

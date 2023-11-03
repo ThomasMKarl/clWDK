@@ -73,9 +73,14 @@ void OclSetup::oclBuildProgram(const std::string binaryFilename, const std::stri
   //cl_program prog = clCreateProgramWithIL(context.get(),(void*)(spirString.data()), binarySize, &err); OCL_CALL_RET(err);
   //cl_device_id device_list[] = {device.get()};
   //err = clBuildProgram(program.get(), 1, device_list, includePath.c_str(), NULL, NULL);
-  
-  cl::Program::Binaries binary{{(unsigned char)*(binaryString.data()),(unsigned char)(binarySize)}};
-  
+
+#ifndef XOCL
+  cl::Program::Binaries binary{{(unsigned char)*(binaryString.c_str()),(unsigned char)(binarySize)}};
+#endif
+#ifdef XOCL
+  cl::Program::Binaries binary{std::make_pair<char*,unsigned>((char*)(binaryString.c_str()),(unsigned)(binarySize))};
+#endif
+
   std::vector<cl_int> binaryStatus{};
   program = cl::Program(context, {device}, binary, &binaryStatus, &err); OCL_CALL_RET(binaryStatus[0]); OCL_CALL_RET(err);
 
@@ -85,17 +90,18 @@ void OclSetup::oclBuildProgram(const std::string binaryFilename, const std::stri
 
 void OclSetup::createKernelFpga()
 {
-  #pragma omp parallel
+#pragma omp parallel
   {
-	size_t kernelNumber = 0;
-    #ifdef OPENMP
-	  kernelNumber = omp_get_thread_num()+0;
-    #endif
+    size_t kernelNumber = 0;
+#ifdef OPENMP
+    kernelNumber = omp_get_thread_num();
+#endif
 
-	std::string kernelName = "computeZeroPointPicture_";
-	kernelName.append(std::to_string(kernelNumber+1));
+    std::string kernelName{"computeZeroPointPicture:{computeZeroPointPicture_"};
+    kernelName.append(std::to_string(kernelNumber+1));
+    kernelName.append("}");
 
-    #pragma omp critical
+#pragma omp critical
     kernels.push_back(cl::Kernel(program, kernelName.c_str(), &err));
   }OCL_CALL_RET(err);
 }
@@ -141,9 +147,27 @@ std::string getSpirBinaryPath(unsigned short int degree = 32)
 
 std::string getXclbinPath(unsigned short int degree = 32)
 {
-  std::string xclbinPath = "bin/xilinx/weierstrass";
+  std::string xclbinPath = "bin/fpga/weierstrass";
   xclbinPath.append(std::to_string(degree));
   xclbinPath.append(".xclbin");
+
+  return xclbinPath;
+}
+
+std::string getXclbinPath_sw(unsigned short int degree = 32)
+{
+  std::string xclbinPath = "bin/fpga/sw/weierstrass";
+  xclbinPath.append(std::to_string(degree));
+  xclbinPath.append(".sw.xclbin");
+
+  return xclbinPath;
+}
+
+std::string getXclbinPath_hw(unsigned short int degree = 32)
+{
+  std::string xclbinPath = "bin/fpga/hw/weierstrass";
+  xclbinPath.append(std::to_string(degree));
+  xclbinPath.append(".hw.xclbin");
 
   return xclbinPath;
 }
